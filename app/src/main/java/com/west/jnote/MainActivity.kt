@@ -85,6 +85,9 @@ fun NotesApp() {
                     notesMap[folderId] = (notesMap[folderId] ?: emptyList()).map {
                         if (it.id == updatedNote.id) updatedNote else it
                     }
+                },
+                onDeleteNote = { noteToDelete ->
+                    notesMap[folderId] = (notesMap[folderId] ?: emptyList()).filter { it.id != noteToDelete.id }
                 }
             )
         }
@@ -216,7 +219,7 @@ fun FolderItem(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
-            imageVector = Icons.Default.MailOutline,
+            imageVector = Icons.Default.Email,
             contentDescription = "Folder",
             tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(24.dp)
@@ -370,7 +373,8 @@ fun NoteEditorScreen(
     folderId: String,
     noteId: String?,
     notesMap: Map<String, List<Note>>,
-    onSaveNote: (Note) -> Unit
+    onSaveNote: (Note) -> Unit,
+    onDeleteNote: (Note) -> Unit
 ) {
     val folderNotes = notesMap[folderId] ?: emptyList()
     val existingNote = noteId?.let { id -> folderNotes.firstOrNull { it.id == id } }
@@ -395,24 +399,43 @@ fun NoteEditorScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = {
-                        if (text.isNotEmpty()) {
-                            // Split text into title and content
-                            val lines = text.lines()
-                            val title = lines.firstOrNull() ?: ""
-                            val content = if (lines.size > 1) lines.drop(1).joinToString("\n") else ""
-
-                            val updatedNote = Note(
-                                id = existingNote?.id ?: UUID.randomUUID().toString(),
-                                title = title,
-                                content = content,
-                                date = currentDate,
-                                isChecked = existingNote?.isChecked ?: false
+                    // Delete button - only shown for existing notes
+                    if (existingNote != null) {
+                        IconButton(
+                            onClick = {
+                                onDeleteNote(existingNote)
+                                navController.popBackStack()
+                            }
+                        ) {
+                            Icon(
+                                Icons.Default.Delete,
+                                contentDescription = "Delete Note",
+                                tint = Color.Red
                             )
-                            onSaveNote(updatedNote)
-                            navController.popBackStack()
                         }
-                    }) {
+                    }
+
+                    // Save button
+                    IconButton(
+                        onClick = {
+                            if (text.isNotEmpty()) {
+                                // Split text into title and content
+                                val lines = text.lines()
+                                val title = lines.firstOrNull() ?: ""
+                                val content = if (lines.size > 1) lines.drop(1).joinToString("\n") else ""
+
+                                val updatedNote = Note(
+                                    id = existingNote?.id ?: UUID.randomUUID().toString(),
+                                    title = title,
+                                    content = content,
+                                    date = currentDate,
+                                    isChecked = existingNote?.isChecked ?: false
+                                )
+                                onSaveNote(updatedNote)
+                                navController.popBackStack()
+                            }
+                        }
+                    ) {
                         Icon(Icons.Default.Check, contentDescription = "Save")
                     }
                 },
