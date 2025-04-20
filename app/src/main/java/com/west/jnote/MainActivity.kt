@@ -3,7 +3,9 @@ package com.west.jnote
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -30,8 +32,13 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            JnoteTheme {
-                NotesApp()
+            JnoteTheme(darkTheme = true) { // Force dark theme
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = Color(0xFF1C1C1E) // Dark background
+                ) {
+                    NotesApp()
+                }
             }
         }
     }
@@ -40,7 +47,9 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun NotesApp() {
     val navController = rememberNavController()
-    val (folders, setFolders) = remember { mutableStateOf(listOf(Folder(id = "1", name = "Notes"))) }
+    val (folders, setFolders) = remember {
+        mutableStateOf(listOf(Folder(id = "1", name = "Notes", isDefault = true)))
+    }
     val notesMap = remember { mutableStateMapOf<String, List<Note>>() }
 
     NavHost(navController = navController, startDestination = "folders") {
@@ -64,12 +73,14 @@ fun NotesApp() {
             NotesScreen(
                 navController = navController,
                 folder = folder,
-                notes = notesMap.getOrPut(folder.id) { mutableStateListOf() },
+                notes = notesMap.getOrPut(folder.id) { mutableStateListOf() }
+                    .filter { it.content.isNotBlank() },
                 onAddNote = { newNote ->
                     notesMap[folder.id] = (notesMap[folder.id] ?: emptyList()) + newNote
                 },
                 onDeleteNote = { noteToDelete ->
-                    notesMap[folder.id] = (notesMap[folder.id] ?: emptyList()).filter { it.id != noteToDelete.id }
+                    notesMap[folder.id] = (notesMap[folder.id] ?: emptyList())
+                        .filter { it.id != noteToDelete.id }
                 }
             )
         }
@@ -87,7 +98,8 @@ fun NotesApp() {
                     }
                 },
                 onDeleteNote = { noteToDelete ->
-                    notesMap[folderId] = (notesMap[folderId] ?: emptyList()).filter { it.id != noteToDelete.id }
+                    notesMap[folderId] = (notesMap[folderId] ?: emptyList())
+                        .filter { it.id != noteToDelete.id }
                 }
             )
         }
@@ -110,30 +122,48 @@ fun FoldersScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Folders") },
+                title = {
+                    Text(
+                        "Folders",
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color.White
+                    )
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface
+                    containerColor = Color(0xFF1C1C1E), // Dark background
+                    titleContentColor = Color.White
                 ),
                 actions = {
                     IconButton(onClick = { showAddFolderDialog = true }) {
-                        Icon(Icons.Default.Create, contentDescription = "Add Folder")
+                        Icon(
+                            Icons.Default.Add,
+                            contentDescription = "Add Folder",
+                            tint = Color(0xFF0A84FF) // Light blue color for dark theme
+                        )
                     }
                 }
             )
         },
         content = { padding ->
-            Column(modifier = Modifier.padding(padding)) {
+            Column(
+                modifier = Modifier
+                    .padding(padding)
+                    .background(Color(0xFF1C1C1E)) // Dark background
+            ) {
                 LazyColumn {
                     items(folders) { folder ->
-                        val noteCount = notesMap[folder.id]?.size ?: 0
+                        val noteCount = (notesMap[folder.id] ?: emptyList())
+                            .count { it.content.isNotBlank() }
                         FolderItem(
                             folder = folder.copy(count = noteCount),
                             onClick = {
                                 navController.navigate("notes/${folder.id}")
                             },
-                            onDelete = {
-                                folderToDelete = folder
+                            onDelete = if (!folder.isDefault) {
+                                { folderToDelete = folder }
+                            } else {
+                                null
                             }
                         )
                     }
@@ -145,13 +175,31 @@ fun FoldersScreen(
     if (showAddFolderDialog) {
         AlertDialog(
             onDismissRequest = { showAddFolderDialog = false },
-            title = { Text("New Folder") },
+            title = {
+                Text(
+                    "New Folder",
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color.White
+                )
+            },
             text = {
                 OutlinedTextField(
                     value = newFolderName,
                     onValueChange = { newFolderName = it },
-                    label = { Text("Folder name") },
-                    modifier = Modifier.fillMaxWidth()
+                    label = {
+                        Text(
+                            "Folder name",
+                            color = Color(0xFF8E8E93) // Light gray
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color(0xFF2C2C2E),
+                        unfocusedContainerColor = Color(0xFF2C2C2E),
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White
+                    )
                 )
             },
             confirmButton = {
@@ -160,31 +208,55 @@ fun FoldersScreen(
                         if (newFolderName.isNotBlank()) {
                             onAddFolder(Folder(
                                 id = UUID.randomUUID().toString(),
-                                name = newFolderName
+                                name = newFolderName,
+                                isDefault = false
                             ))
                             newFolderName = ""
                             showAddFolderDialog = false
                         }
                     }
                 ) {
-                    Text("Add")
+                    Text(
+                        "Add",
+                        color = Color(0xFF0A84FF), // Light blue
+                        fontSize = 17.sp
+                    )
                 }
             },
             dismissButton = {
                 TextButton(
                     onClick = { showAddFolderDialog = false }
                 ) {
-                    Text("Cancel")
+                    Text(
+                        "Cancel",
+                        fontSize = 17.sp,
+                        color = Color(0xFF0A84FF) // Light blue
+                    )
                 }
-            }
+            },
+            containerColor = Color(0xFF2C2C2E), // Dark gray
+            textContentColor = Color.White
         )
     }
 
     folderToDelete?.let { folder ->
         AlertDialog(
             onDismissRequest = { folderToDelete = null },
-            title = { Text("Delete Folder") },
-            text = { Text("Are you sure you want to delete '${folder.name}' and all its notes?") },
+            title = {
+                Text(
+                    "Delete Folder",
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color.White
+                )
+            },
+            text = {
+                Text(
+                    "Are you sure you want to delete '${folder.name}' and all its notes?",
+                    fontSize = 13.sp,
+                    color = Color(0xFF8E8E93) // Light gray
+                )
+            },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -192,16 +264,26 @@ fun FoldersScreen(
                         folderToDelete = null
                     }
                 ) {
-                    Text("Delete", color = Color.Red)
+                    Text(
+                        "Delete",
+                        color = Color(0xFFFF3B30), // Red
+                        fontSize = 17.sp
+                    )
                 }
             },
             dismissButton = {
                 TextButton(
                     onClick = { folderToDelete = null }
                 ) {
-                    Text("Cancel")
+                    Text(
+                        "Cancel",
+                        fontSize = 17.sp,
+                        color = Color(0xFF0A84FF) // Light blue
+                    )
                 }
-            }
+            },
+            containerColor = Color(0xFF2C2C2E), // Dark gray
+            textContentColor = Color.White
         )
     }
 }
@@ -210,45 +292,54 @@ fun FoldersScreen(
 fun FolderItem(
     folder: Folder,
     onClick: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: (() -> Unit)?
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(16.dp),
+            .height(44.dp)
+            .clickable(onClick = onClick)
+            .background(Color(0xFF2C2C2E)) // Dark gray background
+            .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
             imageVector = Icons.Default.Email,
             contentDescription = "Folder",
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(24.dp)
+            tint = Color(0xFF0A84FF), // Light blue
+            modifier = Modifier.size(22.dp)
         )
         Spacer(modifier = Modifier.width(16.dp))
         Text(
             text = folder.name,
-            modifier = Modifier
-                .weight(1f)
-                .clickable(onClick = onClick),
-            fontSize = 16.sp
+            modifier = Modifier.weight(1f),
+            fontSize = 17.sp,
+            color = Color.White
         )
         Text(
             text = folder.count.toString(),
-            color = Color.Gray,
-            fontSize = 16.sp,
+            color = Color(0xFF8E8E93), // Light gray
+            fontSize = 17.sp,
             modifier = Modifier.padding(horizontal = 8.dp)
         )
-        IconButton(
-            onClick = onDelete,
-            modifier = Modifier.size(24.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Default.Delete,
-                contentDescription = "Delete Folder",
-                tint = Color.Red
-            )
+
+        if (onDelete != null) {
+            IconButton(
+                onClick = onDelete,
+                modifier = Modifier.size(24.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Delete,
+                    contentDescription = "Delete Folder",
+                    tint = Color(0xFF8E8E93) // Light gray
+                )
+            }
         }
     }
+    Divider(
+        color = Color(0xFF38383A), // Dark divider
+        thickness = 0.5.dp
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -260,42 +351,63 @@ fun NotesScreen(
     onAddNote: (Note) -> Unit,
     onDeleteNote: (Note) -> Unit
 ) {
-    val dateFormat = SimpleDateFormat("EEEE", Locale.getDefault())
+    val dateFormat = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
     val currentDate = dateFormat.format(Date())
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(folder.name) },
+                title = {
+                    Text(
+                        folder.name,
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color.White
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(
+                            Icons.Default.ArrowBack,
+                            contentDescription = "Back",
+                            tint = Color(0xFF0A84FF) // Light blue
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface
+                    containerColor = Color(0xFF1C1C1E), // Dark background
+                    titleContentColor = Color.White
                 )
             )
         },
         content = { padding ->
-            Column(modifier = Modifier.padding(padding)) {
+            Column(
+                modifier = Modifier
+                    .padding(padding)
+                    .background(Color(0xFF1C1C1E)) // Dark background
+            ) {
                 if (notes.isEmpty()) {
                     Box(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text("No notes yet. Tap + to create one.")
+                        Text(
+                            "No notes yet. Tap + to create one.",
+                            fontSize = 15.sp,
+                            color = Color(0xFF8E8E93) // Light gray
+                        )
                     }
                 } else {
                     LazyColumn {
                         items(notes) { note ->
-                            NoteItem(
-                                note = note,
-                                onClick = {
-                                    navController.navigate("note_editor/${folder.id}/${note.id}")
-                                }
-                            )
+                            if (note.content.isNotBlank()) {
+                                NoteItem(
+                                    note = note,
+                                    onClick = {
+                                        navController.navigate("note_editor/${folder.id}/${note.id}")
+                                    }
+                                )
+                            }
                         }
                     }
                 }
@@ -313,9 +425,13 @@ fun NotesScreen(
                     onAddNote(newNote)
                     navController.navigate("note_editor/${folder.id}/${newNote.id}")
                 },
-                containerColor = MaterialTheme.colorScheme.primary
+                containerColor = Color(0xFF0A84FF) // Light blue
             ) {
-                Icon(Icons.Default.Add, contentDescription = "New Note")
+                Icon(
+                    Icons.Default.Add,
+                    contentDescription = "New Note",
+                    tint = Color.White
+                )
             }
         }
     )
@@ -326,44 +442,43 @@ fun NoteItem(note: Note, onClick: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(16.dp)
+            .background(Color(0xFF2C2C2E)) // Dark gray background
     ) {
-        if (note.title.isNotEmpty()) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (note.isChecked) {
-                    Checkbox(
-                        checked = note.isChecked,
-                        onCheckedChange = null,
-                        modifier = Modifier.size(20.dp)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(60.dp)
+                .clickable(onClick = onClick)
+                .padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
+                val firstLine = note.content.lines().firstOrNull() ?: ""
+                if (firstLine.isNotBlank()) {
+                    Text(
+                        text = firstLine,
+                        fontWeight = FontWeight.Normal,
+                        fontSize = 16.sp,
+                        color = Color.White,
+                        maxLines = 1
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
+
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = note.date,
+                        fontSize = 13.sp,
+                        color = Color(0xFF8E8E93) // Light gray
+                    )
                 }
-                Text(
-                    text = note.title,
-                    fontWeight = if (note.isChecked) FontWeight.Normal else FontWeight.Bold,
-                    fontSize = 16.sp
-                )
             }
         }
-
-        if (note.content.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = note.content,
-                fontSize = 14.sp,
-                color = Color.Gray
-            )
-        }
-
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = note.date,
-            fontSize = 12.sp,
-            color = Color.Gray
+        Divider(
+            color = Color(0xFF38383A), // Dark divider
+            thickness = 0.5.dp
         )
     }
-    Divider()
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -379,91 +494,131 @@ fun NoteEditorScreen(
     val folderNotes = notesMap[folderId] ?: emptyList()
     val existingNote = noteId?.let { id -> folderNotes.firstOrNull { it.id == id } }
 
-    // Combine title and content for editing
-    val initialText = remember(existingNote) {
-        val note = existingNote ?: return@remember ""
-        if (note.content.isEmpty()) note.title else "${note.title}\n${note.content}"
-    }
-
-    var text by remember { mutableStateOf(initialText) }
-    val dateFormat = SimpleDateFormat("EEEE", Locale.getDefault())
+    var text by remember { mutableStateOf(existingNote?.content ?: "") }
+    val dateFormat = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
     val currentDate = dateFormat.format(Date())
+
+    BackHandler {
+        if (text.isBlank()) {
+            noteId?.let {
+                onDeleteNote(Note(id = it, title = "", content = "", date = ""))
+            }
+        }
+        navController.popBackStack()
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(existingNote?.date ?: currentDate) },
+                title = {
+                    Text(
+                        if (text.isNotBlank()) existingNote?.date ?: currentDate else "New Note",
+                        fontSize = 13.sp,
+                        color = Color(0xFF8E8E93) // Light gray
+                    )
+                },
                 navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                    IconButton(onClick = {
+                        if (text.isBlank()) {
+                            noteId?.let {
+                                onDeleteNote(Note(id = it, title = "", content = "", date = ""))
+                            }
+                        }
+                        navController.popBackStack()
+                    }) {
+                        Icon(
+                            Icons.Default.ArrowBack,
+                            contentDescription = "Back",
+                            tint = Color(0xFF0A84FF) // Light blue
+                        )
                     }
                 },
                 actions = {
-                    // Delete button - only shown for existing notes
-                    if (existingNote != null) {
-                        IconButton(
+                    if (existingNote != null && text.isNotBlank()) {
+                        TextButton(
                             onClick = {
                                 onDeleteNote(existingNote)
                                 navController.popBackStack()
                             }
                         ) {
-                            Icon(
-                                Icons.Default.Delete,
-                                contentDescription = "Delete Note",
-                                tint = Color.Red
+                            Text(
+                                "Delete",
+                                color = Color(0xFFFF3B30), // Red
+                                fontSize = 17.sp
                             )
                         }
                     }
 
-                    // Save button
-                    IconButton(
+                    TextButton(
                         onClick = {
-                            if (text.isNotEmpty()) {
-                                // Split text into title and content
-                                val lines = text.lines()
-                                val title = lines.firstOrNull() ?: ""
-                                val content = if (lines.size > 1) lines.drop(1).joinToString("\n") else ""
-
+                            if (text.isNotBlank()) {
+                                val firstLine = text.lines().firstOrNull() ?: ""
                                 val updatedNote = Note(
                                     id = existingNote?.id ?: UUID.randomUUID().toString(),
-                                    title = title,
-                                    content = content,
+                                    title = firstLine,
+                                    content = text,
                                     date = currentDate,
                                     isChecked = existingNote?.isChecked ?: false
                                 )
                                 onSaveNote(updatedNote)
                                 navController.popBackStack()
                             }
-                        }
+                        },
+                        enabled = text.isNotBlank()
                     ) {
-                        Icon(Icons.Default.Check, contentDescription = "Save")
+                        Text(
+                            "Done",
+                            color = if (text.isNotBlank()) Color(0xFF0A84FF) else Color(0xFF8E8E93),
+                            fontSize = 17.sp
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface
+                    containerColor = Color(0xFF1C1C1E), // Dark background
+                    titleContentColor = Color.White
                 )
             )
         },
         content = { padding ->
-            Column(modifier = Modifier.padding(padding)) {
-                TextField(
-                    value = text,
-                    onValueChange = { text = it },
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(16.dp),
-                    placeholder = { Text("Start typing...") }
-                )
-            }
+            Column(
+                modifier = Modifier
+                    .padding(padding)
+                    .background(Color(0xFF2C2C2E)) // Dark gray background
+            ){
+                        TextField(
+                            value = text,
+                            onValueChange = { text = it },
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(16.dp),
+                            placeholder = {
+                                Text(
+                                    "Start typing...",
+                                    color = Color(0xFF8E8E93) // Light gray
+                                )
+                            },
+                            textStyle = LocalTextStyle.current.copy(
+                                fontSize = 16.sp,
+                                color = Color.White
+                            ),
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = Color(0xFF2C2C2E),
+                                unfocusedContainerColor = Color(0xFF2C2C2E),
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White,
+                                cursorColor = Color(0xFF0A84FF) // Light blue
+                            )
+                        )
+                    }
         }
     )
 }
 
-// Data classes
+// Data classes remain the same
 data class Folder(
     val id: String,
     val name: String,
+    val isDefault: Boolean = false,
     val count: Int = 0
 )
 
